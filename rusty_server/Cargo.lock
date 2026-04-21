@@ -186,13 +186,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "actix_test"
-version = "0.1.0"
-dependencies = [
- "actix-web",
-]
-
-[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -959,6 +952,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
 dependencies = [
  "semver",
+]
+
+[[package]]
+name = "rusty_server"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
 ]
 
 [[package]]

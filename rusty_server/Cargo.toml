@@ -1,5 +1,5 @@
 [package]
-name = "actix_test"
+name = "rusty_server"
 version = "0.1.0"
 edition = "2024"
 
