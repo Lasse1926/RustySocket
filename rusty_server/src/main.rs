@@ -14,17 +14,20 @@ async fn dash_page()-> HttpResponse{
 async fn increase(state:web::Data<AppState>)-> HttpResponse{
     let mut count = state.count.lock().unwrap();
     *count += 1;
+    println!("Request recived increase");
     HttpResponse::Ok().body("increase count")
 }
 #[put("/counter/decrease")]
 async fn decrease(state:web::Data<AppState>)-> HttpResponse{
     let mut count = state.count.lock().unwrap();
     *count -= 1;
+    println!("Request recived Decrease");
     HttpResponse::Ok().body("decrease count")
 }
 #[get("/counter")]
 async fn get_counter(state:web::Data<AppState>)-> HttpResponse{
     let count = state.count.lock().unwrap();
+    println!("Request recived data");
     HttpResponse::Ok().body(format!("counter: {}",count))
 }
 

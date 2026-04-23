@@ -8,20 +8,21 @@ fn main() {
     let _ = eframe::run_native("My egui App", native_options, Box::new(|cc| Ok(Box::new(MyEguiApp::new(cc)))));
 }
 
-#[derive(Deserialize, Debug)]
-struct Todo {
-  userId: i32,
-  id: i32,
-  title: String,
-  completed: bool
-}
+// #[derive(Deserialize, Debug)]
+// struct Todo {
+//   userId: i32,
+//   id: i32,
+//   title: String,
+//   completed: bool
+// }
 
 enum AppMessage {
-    Todo(Todo),
+    Msg(String),
     Error(String),
 }
 
 struct MyEguiApp {
+    client:reqwest::blocking::Client,
     tx: Sender<AppMessage>,
     rx: Receiver<AppMessage>,
 
@@ -35,19 +36,57 @@ impl MyEguiApp {
         // for e.g. egui::PaintCallback.
         let (tx, rx) = std::sync::mpsc::channel::<AppMessage>();
         Self { 
+            client: reqwest::blocking::Client::new(),
             tx,
             rx, 
         }
     }
     fn request_data(&self) {
         let tx = self.tx.clone();
+        let client = self.client.clone();
         thread::spawn(move || {
-            let res = reqwest::blocking::get("https://jsonplaceholder.typicode.com/todos/1")
-                .and_then(|r| r.json::<Todo>());
+            let res = client.get("http://localhost:8080/counter").send()
+                        .and_then(|r| r.text());
 
             match res {
-                Ok(todo) => {
-                    let _ = tx.send(AppMessage::Todo(todo));
+                Ok(msg) => {
+                    let _ = tx.send(AppMessage::Msg(msg));
+                }
+                Err(e) => {
+                    let _ = tx.send(AppMessage::Error(e.to_string()));
+                }
+            }
+        });
+    }
+
+    fn increase_counter(&self) {
+        let tx = self.tx.clone();
+        let client = self.client.clone();
+        thread::spawn(move || {
+            let res = client.put("http://localhost:8080/counter/increase").send()
+                        .and_then(|r| r.text());
+
+            match res {
+                Ok(msg) => {
+                    let _ = tx.send(AppMessage::Msg(msg));
+                }
+                Err(e) => {
+                    let _ = tx.send(AppMessage::Error(e.to_string()));
+                }
+            }
+        });
+    }
+
+    fn decreas_counter(&self) {
+        let tx = self.tx.clone();
+        let client = self.client.clone();
+        thread::spawn(move || {
+            let res = client.put("http://localhost:8080/counter/decrease").send()
+                        .and_then(|r| r.text());
+
+            match res {
+                Ok(msg) => {
+                    let _ = tx.send(AppMessage::Msg(msg));
                 }
                 Err(e) => {
                     let _ = tx.send(AppMessage::Error(e.to_string()));
@@ -61,8 +100,8 @@ impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
-                AppMessage::Todo(todo) => {
-                    println!("{}",todo.title);
+                AppMessage::Msg(msg) => {
+                    println!("{}",msg);
                 }
                 AppMessage::Error(e) => {
                 }
@@ -72,7 +111,18 @@ impl eframe::App for MyEguiApp {
             if ui.button("send request").clicked() {
                 self.request_data();
             }
+
+            ui.vertical(|ui|{
+                if ui.button("Increase").clicked() {
+                    self.increase_counter();
+                }
+
+                if ui.button("Decrease").clicked() {
+                    self.decreas_counter();
+                }
+            })
         });
+
     }
 }
 
