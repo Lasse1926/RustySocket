@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc,Mutex};
 
+use reqwest::{Error, Response};
+mod api_types;
+
 fn main() {
     let native_options = eframe::NativeOptions::default();
     let _ = eframe::run_native("My egui App", native_options, Box::new(|cc| Ok(Box::new(MyEguiApp::new(cc)))));
@@ -15,8 +18,10 @@ enum RequestId {
 
 #[derive(Debug)]
 enum AppMessage {
-    Msg(String),
+    ChatLog(api_types::ChatLog),
+    Msg(api_types::ChatMsg),
     Error(String),
+    CallResponse(Response),
 }
 
 struct RequestState {
@@ -39,22 +44,16 @@ struct ApiClient{
 }
 
 impl ApiClient {
-    async fn request_data(&self) -> Result<AppMessage, reqwest::Error> {
-        let res = self.client.get("http://localhost:8080/counter").send().await?;
+    async fn request_chat_log(&self) -> Result<AppMessage, reqwest::Error> {
+        let res = self.client.get("http://localhost:8080/chat/get_msgs").send().await?;
         let text = res.text().await?;
-        Ok(AppMessage::Msg(text))
+        Ok(AppMessage::ChatLog(serde_json::from_str(&text).unwrap_or(api_types::ChatLog::new())))
     }
 
-    async fn increase_counter(&self) -> Result<AppMessage, reqwest::Error> {
-        let res = self.client.put("http://localhost:8080/counter/increase").send().await?;
-        let text = res.text().await?;
-        Ok(AppMessage::Msg(text))
-    }
-
-    async fn decreas_counter(&self) -> Result<AppMessage, reqwest::Error> {
-        let res = self.client.put("http://localhost:8080/counter/decrease").send().await?;
-        let text = res.text().await?;
-        Ok(AppMessage::Msg(text))
+    async fn send_msg(&self,msg:String,sender:String) -> Result<AppMessage, reqwest::Error> {
+        let msg = api_types::ChatMsg::new(msg,sender);
+        let res = self.client.put("http://localhost:8080/chat/send").json(&msg).send().await?;
+        Ok(AppMessage::CallResponse(res))
     }
 }
 
@@ -111,10 +110,10 @@ impl eframe::App for MyEguiApp {
 
             if state.loading {
                 ui.add_enabled(false, egui::Button::new("Request Data..."));
-            } else if ui.button("Request Data").clicked() {
+            } else if ui.button("Request Chat Log").clicked() {
                 let api = self.api_client.clone();
                 self.spawn_request(RequestId::RequestData, async move {
-                    api.request_data().await.unwrap_or(AppMessage::Error("failed".into()))
+                    api.request_chat_log().await.unwrap_or(AppMessage::Error("failed".into()))
                 });
             }
 
@@ -126,18 +125,7 @@ impl eframe::App for MyEguiApp {
                 } else if ui.button("Increase").clicked() {
                     let api = self.api_client.clone();
                     self.spawn_request(RequestId::Increase, async move {
-                        api.increase_counter().await.unwrap_or(AppMessage::Error("failed".into()))
-                    });
-                }
-
-                let state = self.state(RequestId::Decrease);
-
-                if state.loading {
-                    ui.add_enabled(false, egui::Button::new("Decreasing..."));
-                } else if ui.button("Decrease").clicked() {
-                    let api = self.api_client.clone();
-                    self.spawn_request(RequestId::Decrease, async move {
-                        api.decreas_counter().await.unwrap_or(AppMessage::Error("failed".into()))
+                        api.send_msg("Testing".to_string(),"Client".to_string()).await.unwrap_or(AppMessage::Error("failed".into()))
                     });
                 }
             })
