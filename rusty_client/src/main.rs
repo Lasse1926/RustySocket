@@ -11,9 +11,8 @@ fn main() {
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy,Debug)]
 enum RequestId {
-    Increase,
-    Decrease,
-    RequestData,
+    RequestChatLog,
+    SendMsgResponse,
 }
 
 #[derive(Debug)]
@@ -61,6 +60,7 @@ struct MyEguiApp {
     api_client: ApiClient,
     runtime: tokio::runtime::Runtime,
     requests: HashMap<RequestId, RequestState>,
+    chat_log: api_types::ChatLog,
 
 }
 
@@ -74,6 +74,7 @@ impl MyEguiApp {
             api_client: ApiClient { client: reqwest::Client::new() }, 
             runtime: tokio::runtime::Runtime::new().unwrap(),
             requests: HashMap::new(),
+            chat_log: api_types::ChatLog::new(),
         }
     }
 
@@ -101,30 +102,42 @@ impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         for (id, state) in &mut self.requests {
             if let Some(msg) = state.result.lock().unwrap().take() {
-                state.loading = false;
-                println!("Request {:?} finished: {:?}", id, msg);
+                match msg {
+                    AppMessage::Msg(msg) => {},
+                    AppMessage::Error(error) => {},
+                    AppMessage::ChatLog(chat_log) => {
+                        state.loading = false;
+                        self.chat_log = chat_log.clone();
+                        println!("{:?}",self.chat_log);
+                    },
+                    AppMessage::CallResponse(response) => {
+                        state.loading = false;
+                        println!("msg Send");
+                    },
+                    
+                }
             }
         }
         egui::CentralPanel::default().show(ctx, |ui| {
-            let state = self.state(RequestId::RequestData);
+            let state = self.state(RequestId::RequestChatLog);
 
             if state.loading {
                 ui.add_enabled(false, egui::Button::new("Request Data..."));
             } else if ui.button("Request Chat Log").clicked() {
                 let api = self.api_client.clone();
-                self.spawn_request(RequestId::RequestData, async move {
+                self.spawn_request(RequestId::RequestChatLog, async move {
                     api.request_chat_log().await.unwrap_or(AppMessage::Error("failed".into()))
                 });
             }
 
             ui.vertical(|ui|{
-                let state = self.state(RequestId::Increase);
+                let state = self.state(RequestId::SendMsgResponse);
 
                 if state.loading {
                     ui.add_enabled(false, egui::Button::new("Increasing..."));
                 } else if ui.button("Increase").clicked() {
                     let api = self.api_client.clone();
-                    self.spawn_request(RequestId::Increase, async move {
+                    self.spawn_request(RequestId::SendMsgResponse, async move {
                         api.send_msg("Testing".to_string(),"Client".to_string()).await.unwrap_or(AppMessage::Error("failed".into()))
                     });
                 }
