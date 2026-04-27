@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
-#[derive(Deserialize,Serialize,Debug)]
+#[derive(Deserialize,Serialize,Debug,Clone)]
 pub struct ChatMsg {
-    sender: String,
-    msg: String,
+    pub sender: String,
+    pub msg: String,
 }
 
 impl ChatMsg {
@@ -12,9 +12,9 @@ impl ChatMsg {
     
 }
 
-#[derive(Deserialize,Serialize,Debug)]
+#[derive(Deserialize,Serialize,Debug,Clone)]
 pub struct ChatLog {
-    log: Vec<ChatMsg>, 
+    pub log: Vec<ChatMsg>, 
 }
 
 impl ChatLog {

@@ -61,6 +61,8 @@ struct MyEguiApp {
     runtime: tokio::runtime::Runtime,
     requests: HashMap<RequestId, RequestState>,
     chat_log: api_types::ChatLog,
+    user_name : String,
+    msg_text : String,
 
 }
 
@@ -75,6 +77,8 @@ impl MyEguiApp {
             runtime: tokio::runtime::Runtime::new().unwrap(),
             requests: HashMap::new(),
             chat_log: api_types::ChatLog::new(),
+            user_name: "Client".to_string(),
+            msg_text : String::new(),
         }
     }
 
@@ -131,16 +135,34 @@ impl eframe::App for MyEguiApp {
             }
 
             ui.vertical(|ui|{
-                let state = self.state(RequestId::SendMsgResponse);
 
-                if state.loading {
-                    ui.add_enabled(false, egui::Button::new("Increasing..."));
-                } else if ui.button("Increase").clicked() {
-                    let api = self.api_client.clone();
-                    self.spawn_request(RequestId::SendMsgResponse, async move {
-                        api.send_msg("Testing".to_string(),"Client".to_string()).await.unwrap_or(AppMessage::Error("failed".into()))
+                for chat_msg in &self.chat_log.log {
+                    ui.horizontal(|ui|{
+                        ui.label(&chat_msg.sender);
+                        ui.separator();
+                        ui.label(&chat_msg.msg);
                     });
                 }
+                ui.horizontal(|ui|{
+                    ui.label("Name :");
+                    ui.add(egui::TextEdit::singleline(&mut self.user_name));
+
+                    ui.label("Msg :");
+                    ui.add(egui::TextEdit::singleline(&mut self.msg_text));
+
+                    let state = self.state(RequestId::SendMsgResponse);
+
+                    if state.loading {
+                        ui.add_enabled(false, egui::Button::new("Sending..."));
+                    } else if ui.button("Send").clicked() {
+                        let api = self.api_client.clone();
+                        let msg_text = self.msg_text.clone();
+                        let user_name = self.user_name.clone();
+                        self.spawn_request(RequestId::SendMsgResponse, async move {
+                            api.send_msg(msg_text,user_name).await.unwrap_or(AppMessage::Error("failed".into()))
+                        });
+                    }
+                });
             })
         });
 
