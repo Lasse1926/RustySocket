@@ -1,12 +1,37 @@
 use std::collections::HashMap;
 use std::sync::{Arc,Mutex};
+use tokio_tungstenite::connect_async;
+use futures_util::StreamExt;
 
 use reqwest::{Error, Response};
 mod api_types;
 
 fn main() {
     let native_options = eframe::NativeOptions::default();
-    let _ = eframe::run_native("My egui App", native_options, Box::new(|cc| Ok(Box::new(MyEguiApp::new(cc)))));
+
+    let new_msgs = Arc::new(Mutex::new(api_types::ChatLog::new()));
+    let new_msgs_clone = new_msgs.clone();
+
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+
+    runtime.spawn(async move {
+        let url = "ws://127.0.0.1:8080/send_new_msgs";
+
+        let (ws_stream, _) = connect_async(url).await.unwrap();
+        let (_, mut read) = ws_stream.split();
+
+        while let Some(msg) = read.next().await {
+            if let Ok(msg) = msg
+                && msg.is_text() {
+                    let text = msg.to_text().unwrap().to_string();
+
+                    let mut state = new_msgs_clone.lock().unwrap();
+                    let msg = serde_json::from_str(&text).unwrap();
+                    state.add_msg(msg);
+                }
+        }
+    });
+    let _ = eframe::run_native("My egui App", native_options, Box::new(|cc| Ok(Box::new(MyEguiApp::new(cc,new_msgs,runtime)))));
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy,Debug)]
@@ -60,23 +85,23 @@ struct MyEguiApp {
     api_client: ApiClient,
     runtime: tokio::runtime::Runtime,
     requests: HashMap<RequestId, RequestState>,
-    chat_log: api_types::ChatLog,
+    chat_log: Arc<Mutex<api_types::ChatLog>>,
     user_name : String,
     msg_text : String,
 
 }
 
 impl MyEguiApp {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>,chat_log: Arc<Mutex<api_types::ChatLog>>,runtime:tokio::runtime::Runtime) -> Self {
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
         Self { 
             api_client: ApiClient { client: reqwest::Client::new() }, 
-            runtime: tokio::runtime::Runtime::new().unwrap(),
+            runtime,
             requests: HashMap::new(),
-            chat_log: api_types::ChatLog::new(),
+            chat_log,
             user_name: "Client".to_string(),
             msg_text : String::new(),
         }
@@ -111,12 +136,11 @@ impl eframe::App for MyEguiApp {
                     AppMessage::Error(error) => {},
                     AppMessage::ChatLog(chat_log) => {
                         state.loading = false;
-                        self.chat_log = chat_log.clone();
-                        println!("{:?}",self.chat_log);
+                        let mut chat_log_state = self.chat_log.lock().unwrap();
+                        *chat_log_state = chat_log.clone();
                     },
                     AppMessage::CallResponse(response) => {
                         state.loading = false;
-                        println!("msg Send");
                     },
                     
                 }
@@ -135,8 +159,9 @@ impl eframe::App for MyEguiApp {
             }
 
             ui.vertical(|ui|{
-
-                for chat_msg in &self.chat_log.log {
+                let binding = self.chat_log.clone();
+                let chat_log_state = binding.lock().unwrap();
+                for chat_msg in &chat_log_state.log {
                     ui.horizontal(|ui|{
                         ui.label(&chat_msg.sender);
                         ui.separator();
